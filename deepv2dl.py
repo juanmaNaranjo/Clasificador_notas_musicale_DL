@@ -41,7 +41,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 # CONFIGURACIÓN / RUTAS
 # ---------------------------
 # Ajusta esta ruta a tu directorio de cropobjects
-CROPOBJECT_DIR = r'C:\UTP\Machine Learni\proyecto\muscima-pp-master\muscima-pp-master\v1.0\data\cropobjects_manual'
+CROPOBJECT_DIR = r'MUSICMA-PP_V1.0'
 
 # Parámetros de imagen
 TARGET_SIZE = (64, 64)
