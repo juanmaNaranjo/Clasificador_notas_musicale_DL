@@ -3,16 +3,25 @@ Este proyecto implementa una **Red Neuronal Convolucional (CNN)** para clasifica
 
 ---
 ├── MUSIMA/ # Dataset MUSCIMA++
+
 │
 ├── Prueba/ # Carpeta para pruebas de inferencia
+
 │ ├── imagen1.jpg
+
 │ └── ...
+
 │
+
 ├── outputs/
+
 │ ├── symbol_cnn.keras # Modelo entrenado
+
 │ ├── label_encoder.pkl # Codificador de clases
+
 │
 ├── deepv2dl.py # Pipeline principal (train + infer + gradcam)
+
 ├── README.md
 
 ---
@@ -36,11 +45,9 @@ A continuación se presentan los resultados reales logrados por el modelo CNN en
       flat       1.00      0.99      0.99       222
     g-clef       1.00      1.00      1.00        80
    natural       1.00      0.99      0.99       218
-
-   
-   notehead-empty 0.99     0.99     0.99       334
-   notehead-full  1.00     1.00     1.00       4267
-   sharp          0.99     1.00     1.00       414
+ notehead-empty 0.99     0.99     0.99       334
+ notehead-full  1.00     1.00     1.00       4267
+ sharp          0.99     1.00     1.00       414
 
 ✔ **Accuracy global: 1.00**  
 ✔ **Balance excelente por clase**  
