@@ -24,8 +24,16 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
+<<<<<<< HEAD
 
 CROPOBJECT_DIR = r'Clasificador_notas_musicale_DL\MUSCIMA-pp_v1.0\v1.0\data\cropobjects_manual'
+=======
+# ---------------------------
+# CONFIGURACIÓN / RUTAS
+# ---------------------------
+# Ajusta esta ruta a tu directorio de cropobjects
+CROPOBJECT_DIR = r'MUSICMA-PP_V1.0'
+>>>>>>> 12f5db69877f9b6cedd6fbe8d64d2c09d490a841
 
 # Parámetros de imagen
 TARGET_SIZE = (64, 64)
