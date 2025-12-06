@@ -1,16 +1,3 @@
-"""
-script: symbol_cnn_gradcam.py
-Descripción:
-  - Procesa cropobjects de Muscima-pp, genera imágenes de símbolos musicales con contexto,
-    entrena una CNN para clasificación multiclase y produce explicaciones con Grad-CAM.
-  - Elimina cualquier modelo de ensamblado (Random Forest).
-  - Genera reportes, matrices de confusión y guarda el modelo.
-
-Requisitos:
-  pip install muscima pp skimage tensorflow matplotlib seaborn scikit-learn opencv-python
-  (ajusta versiones según tu entorno; el código apunta a TF 2.x)
-"""
-
 import os
 import itertools
 import numpy as np
@@ -37,27 +24,21 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-# ---------------------------
-# CONFIGURACIÓN / RUTAS
-# ---------------------------
-# Ajusta esta ruta a tu directorio de cropobjects
-CROPOBJECT_DIR = r'C:\UTP\Machine Learni\proyecto\muscima-pp-master\muscima-pp-master\v1.0\data\cropobjects_manual'
+
+CROPOBJECT_DIR = r'Clasificador_notas_musicale_DL\MUSCIMA-pp_v1.0\v1.0\data\cropobjects_manual'
 
 # Parámetros de imagen
 TARGET_SIZE = (64, 64)
-MIN_SAMPLES = 100          # mínimo por clase para considerar
+MIN_SAMPLES = 100        
 BATCH_SIZE = 32
-EPOCHS = 5 #25              # se usa early stopping, así que esto es un tope
+EPOCHS = 1000             
 RANDOM_STATE = 42
 
 # Salidas
 OUT_DIR = 'outputs'
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ---------------------------
-# 1) CARGA Y EXTRACCIÓN
-# ---------------------------
-# Símbolos de interés (los mismos que tenías, priorizados)
+# Símbolos de interés
 SYMBOLS_TO_CLASSIFY = [
     'notehead-full', 'notehead-empty',
     'sharp', 'flat', 'natural',
@@ -73,15 +54,11 @@ def load_docs(cropobject_dir):
     return docs
 
 def extract_symbols_from_doc(cropobjects):
-    """Devuelve una lista de tuplas: (lista_de_cropobjects_relevantes, clase_string)
-       Para notas, se incluye el notehead junto con su stem (si existe) dentro
-       de la lista de cropobjects que se usarán para componer la imagen."""
     _cropobj_dict = {c.objid: c for c in cropobjects}
     symbols = []
     for c in cropobjects:
         if c.clsname in SYMBOLS_TO_CLASSIFY:
             if c.clsname.startswith('notehead'):
-                # intentar anexar tallo si existe en outlinks
                 stem_obj = None
                 for o in c.outlinks:
                     _o_obj = _cropobj_dict.get(o)
@@ -117,12 +94,7 @@ print(f"\nClases con >= {MIN_SAMPLES} muestras: {valid_classes}")
 
 filtered_symbols = [(objs, cls) for objs, cls in all_symbols if cls in valid_classes]
 
-# ---------------------------
-# 2) GENERAR IMÁGENES (CON TEXTO/CONTEXTO)
-# ---------------------------
 def get_image_from_cropobjects(cropobjects, margin=5, context=10):
-    """Construye un canvas binario con todos los masks de cropobjects dados,
-       expandiendo con 'context' alrededor del bounding box principal."""
     top = min([c.top for c in cropobjects]) - context
     left = min([c.left for c in cropobjects]) - context
     bottom = max([c.bottom for c in cropobjects]) + context
@@ -150,7 +122,6 @@ def get_image_from_cropobjects(cropobjects, margin=5, context=10):
     return canvas
 
 def preprocess_image(img, target_size=TARGET_SIZE):
-    """Redimensiona manteniendo aspect ratio a target_size y centra en canvas."""
     h, w = img.shape
     if h == 0 or w == 0:
         return np.zeros(target_size, dtype='float32')
@@ -163,7 +134,6 @@ def preprocess_image(img, target_size=TARGET_SIZE):
     canvas[y_start:y_start+new_h, x_start:x_start+new_w] = resized
     return canvas
 
-# Construir dataset: imágenes + etiquetas
 images = []
 labels = []
 errors = 0
@@ -175,23 +145,19 @@ for crop_objs, cls in filtered_symbols:
         labels.append(cls)
     except Exception as e:
         errors += 1
-        # continuar (log mínimo)
-        # print(f"Error procesando símbolo: {e}")
 print(f"Dataset generado: {len(images)} imágenes (errores: {errors})")
 
-X = np.array(images)  # shape (N, H, W)
+X = np.array(images)  
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(labels)
 y = to_categorical(y_encoded)
 
-# ---------------------------
-# 3) DIVISIÓN TRAIN/TEST
-# ---------------------------
+
 X_train, X_test, y_train, y_test, y_train_idx, y_test_idx = train_test_split(
     X, y, y_encoded, test_size=0.2, random_state=RANDOM_STATE, stratify=y_encoded
 )
 
-# Añadir canal para Keras (grayscale)
+
 X_train_cnn = X_train[..., np.newaxis]
 X_test_cnn = X_test[..., np.newaxis]
 
@@ -200,9 +166,7 @@ print("  X_train:", X_train_cnn.shape, " y_train:", y_train.shape)
 print("  X_test:", X_test_cnn.shape, " y_test:", y_test.shape)
 print("Clases:", label_encoder.classes_)
 
-# ---------------------------
-# 4) AUMENTACIÓN DE DATOS
-# ---------------------------
+
 datagen = ImageDataGenerator(
     rotation_range=10,
     width_shift_range=0.1,
@@ -211,9 +175,7 @@ datagen = ImageDataGenerator(
 )
 datagen.fit(X_train_cnn)
 
-# ---------------------------
-# 5) DEFINIR Y ENTRENAR CNN
-# ---------------------------
+
 def build_cnn(input_shape, n_classes):
     model = Sequential([
         Conv2D(32, (3,3), activation='relu', input_shape=input_shape, padding='same', name='conv_1'),
@@ -235,7 +197,7 @@ model.compile(optimizer=Adam(learning_rate=1e-3), loss='categorical_crossentropy
 model.summary()
 
 early_stopping = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
-reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6, verbose=1)
 
 start_time = time.time()
 history = model.fit(
@@ -249,7 +211,7 @@ history = model.fit(
 train_time = time.time() - start_time
 print(f"Tiempo entrenamiento: {train_time:.2f} s")
 
-# Guardar historial gráfico de entrenamiento
+
 plt.figure()
 plt.plot(history.history['loss'], label='train_loss')
 plt.plot(history.history['val_loss'], label='val_loss')
@@ -266,9 +228,7 @@ plt.title('Accuracy')
 plt.savefig(os.path.join(OUT_DIR, 'training_acc.png'))
 plt.close()
 
-# ---------------------------
-# 6) EVALUACIÓN Y REPORTES
-# ---------------------------
+
 test_loss, test_acc = model.evaluate(X_test_cnn, y_test, verbose=0)
 print(f"Precisión en test: {test_acc:.4f}")
 
@@ -301,9 +261,7 @@ MODEL_PATH = os.path.join(OUT_DIR, 'symbol_cnn.keras')
 model.save(MODEL_PATH)
 print(f"Modelo guardado en: {MODEL_PATH}")
 
-# ---------------------------
-# 7) FUNCIONES GRAD-CAM
-# ---------------------------
+
 def find_last_conv_layer(model):
     # devuelve el nombre de la última capa Conv2D en el modelo
     for layer in reversed(model.layers):
@@ -312,12 +270,7 @@ def find_last_conv_layer(model):
     raise ValueError("No se encontró Conv2D en el modelo.")
 
 def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
-    """
-    img_array: array con forma (1, H, W, C)
-    model: modelo Keras
-    last_conv_layer_name: nombre de la última capa conv
-    pred_index: (int) índice de clase a explicar. Si None, usa la predicción del modelo.
-    """
+   
     grad_model = tf.keras.models.Model(
         [model.inputs],
         [model.get_layer(last_conv_layer_name).output, model.outputs[0]]
@@ -341,7 +294,7 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
     return heatmap.numpy()
 
 def save_and_display_gradcam(img, heatmap, out_path, alpha=0.4):
-    """Crea superposición y guarda la imagen resultante."""
+    
     # img: array HxW en rango [0,1]
     hmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
     hmap_uint8 = np.uint8(255 * hmap)
@@ -353,17 +306,15 @@ def save_and_display_gradcam(img, heatmap, out_path, alpha=0.4):
     cv2.imwrite(out_path, superimposed)
     return superimposed
 
-# ---------------------------
-# 8) GENERAR GRADCAMS PARA VARIAS IMÁGENES DE TEST
-# ---------------------------
+
 last_conv = find_last_conv_layer(model)
 print("Última capa conv detectada:", last_conv)
 
-# Selecciona hasta N ejemplos por clase del set de test para visualizar
-N_PER_CLASS = 3
-examples = []  # (img_array, true_label_idx, pred_idx)
 
-# agrupar índices por clase
+N_PER_CLASS = 3
+examples = []  
+
+
 from collections import defaultdict
 idx_by_class = defaultdict(list)
 for i, lbl in enumerate(y_true):
@@ -373,13 +324,13 @@ for cls_idx, idxs in idx_by_class.items():
     for i in idxs[:N_PER_CLASS]:
         examples.append(i)
 
-# Generar GradCAMs
+
 gradcam_folder = os.path.join(OUT_DIR, 'gradcams')
 os.makedirs(gradcam_folder, exist_ok=True)
 
 for i in examples:
-    img = X_test[i]            # HxW
-    img_cnn = X_test_cnn[i:i+1]  # 1xHxWx1
+    img = X_test[i]            
+    img_cnn = X_test_cnn[i:i+1] 
     pred_probs = model.predict(img_cnn)
     pred_idx = np.argmax(pred_probs[0])
     model.predict(np.zeros((1, 64, 64, 1)))
@@ -388,11 +339,8 @@ for i in examples:
     save_and_display_gradcam(img, heatmap, out_file)
     print(f"Grad-CAM guardado: {out_file}")
 
-# ---------------------------
-# 9) FUNCIÓN DE PREDICCIÓN PARA UNA IMAGEN EXTERNA (EJEMPLO)
-# ---------------------------
+
 def predict_single_image(path, model, encoder, size=TARGET_SIZE):
-    """Carga una imagen externa (JPG/PNG), la procesa y devuelve la predicción + GradCAM."""
     img = imread(path)
     if img.ndim == 3:
         if img.shape[2] == 4:
@@ -411,10 +359,34 @@ def predict_single_image(path, model, encoder, size=TARGET_SIZE):
     save_and_display_gradcam(img_p, heatmap, out_path)
     return pred_label, out_path
 
-# Ejemplo de uso:
-# ejemplo_path = r'C:\UTP\Machine Learni\imagen1.jpg'
-# if os.path.exists(ejemplo_path):
-#     plabel, gout = predict_single_image(ejemplo_path, model, label_encoder)
-#     print("Predicción:", plabel, "GradCAM guardado en:", gout)
+
+'''ejemplo_path = r'imagen1.jpg'
+if os.path.exists(ejemplo_path):
+    plabel, gout = predict_single_image(ejemplo_path, model, label_encoder)
+    print("Predicción:", plabel, "GradCAM guardado en:", gout)
 
 print("Script finalizado. Revisa la carpeta 'outputs' para resultados (modelos, imágenes y reportes).")
+'''
+
+
+FOLDER_PATH = r"Clasificador_notas_musicale_DL\Prueba"
+
+if os.path.exists(FOLDER_PATH) and os.path.isdir(FOLDER_PATH):
+    # Iterar por cada archivo dentro de la carpeta
+    for filename in os.listdir(FOLDER_PATH):
+        image_path = os.path.join(FOLDER_PATH, filename)
+        
+        # Validar que sea una imagen por extensión
+        if filename.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
+            try:
+                plabel, gout = predict_single_image(image_path, model, label_encoder)
+                print(f"Imagen: {filename}")
+                print(f"  → Predicción: {plabel}")
+                print(f"  → GradCAM guardado en: {gout}")
+                print("-" * 50)
+            except Exception as e:
+                print(f"Error procesando {filename}: {e}")
+else:
+    print("La ruta especificada no existe o no es una carpeta válida.")
+
+print("Procesamiento finalizado. Revisa la carpeta 'outputs' para resultados (modelos, imágenes y reportes).")
